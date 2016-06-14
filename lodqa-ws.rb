@@ -48,13 +48,24 @@ class LodqaWS < Sinatra::Base
 
 		@query  = params['query'] unless params['query'].nil?
 		@target = params['target'] unless params['target'].nil?
-
+		@parser = params['parser'] unless params['parser'].nil?
+		
 		if @query
 			parser_url = @config["parser_url"]
 			g = Lodqa::Graphicator.new(parser_url)
 			g.parse(@query)
 			@parse_rendering = g.get_rendering
 			@pgp = g.get_pgp
+			
+			# Like this you could select the parser using the 'parser' argument in your query
+			# if not defined? @parser or @parser.downcase == "default" or @parser.downcase =="Graphicator"
+			# 	g = Lodqa::Graphicator.new(parser_url)
+			# 	g.parse(@query)
+			# 	@parse_rendering = g.get_rendering
+			# 	@pgp = g.get_pgp
+			# else 
+			# 	g = Lodqa::GraphicatorSpacy.new(parser_url)
+			# end
 		end
 
 		erb :index

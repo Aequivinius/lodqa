@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 require 'graphviz'
 require 'enju_access/cgi_accessor'
+require 'enju_access/spacy_accessor'
 #
 # It takes a plain-English sentence as input and returns parsing results by accessing an Enju cgi server.
 #
