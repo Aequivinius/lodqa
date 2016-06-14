@@ -13,7 +13,8 @@ class Lodqa::Graphicator
 
   def initialize (parser_url)
     raise ArgumentError, "parser_url should be given." if parser_url.nil? || parser_url.empty?
-    @parser = EnjuAccess::CGIAccessor.new(parser_url)
+    @parser = EnjuAccess::SpacyAccessor.new(parser_url)
+    # @parser = EnjuAccess::CGIAccessor.new(parser_url)
   end
 
   def parse(query)

@@ -3,12 +3,13 @@
 # It takes a plain-English sentence as input and returns parsing results by accessing an Enju cgi server.
 #
 require 'rest-client'
+require 'json'
 require 'enju_access/graph'
 
 module EnjuAccess; end unless defined? EnjuAccess
 
 # An instance of this class connects to an Enju CGI server to parse a sentence.
-class EnjuAccess::CGIAccessor
+class EnjuAccess::SpacyAccessor
   attr_reader :enju
 
   # Noun-chunk elements
@@ -23,7 +24,7 @@ class EnjuAccess::CGIAccessor
 
   # It initializes an instance of RestClient::Resource to connect to an Enju cgi server
   def initialize (enju_url)
-    @enju = RestClient::Resource.new enju_url
+    @enju = RestClient::Resource.new 'http://spacy.dbcls.jp/spacy_rest'
     raise "An instance of RestClient::Resource has to be passed as the first argument." unless @enju.instance_of? RestClient::Resource
   end
 
@@ -35,9 +36,8 @@ class EnjuAccess::CGIAccessor
     base_noun_chunks = get_base_noun_chunks(tokens)
     focus            = get_focus(tokens, base_noun_chunks)
     relations        = get_relations(tokens, base_noun_chunks)
-    
-    puts tokens, root
     puts base_noun_chunks, focus, relations
+
 
     {
       :tokens => tokens,  # The array of token parses
@@ -46,7 +46,7 @@ class EnjuAccess::CGIAccessor
       :base_noun_chunks => base_noun_chunks, # the array of base noun chunks
       :relations => relations   # Shortest paths between two heads
     }
-
+    
   end
 
   private
@@ -55,39 +55,72 @@ class EnjuAccess::CGIAccessor
   def get_parse (sentence)
     return [[], nil] if sentence.nil? || sentence.strip.empty?
     sentence = sentence.strip
-
-    response = @enju.get :params => {:sentence=>sentence, :format=>'conll'}
+    
+    # send the sentence to the server
+    # the @enju really should be renamed
+    # but like this it easier to compare to CGIAccessor
+    response = @enju.post :text => sentence
+    
     case response.code
     when 200             # 200 means success
       raise "Empty input." if response =~/^Empty line/
 
       tokens = []
+      root = nil
+      # This one will map spaCy produced indexes (with prefixes)
+      # to plain ints
+      # this makes finding relations easier
+      spacy_token_ids = Hash.new
 
-      # response is a parsing result in CONLL format.
-      response.split(/\r?\n/).each_with_index do |t, i|  # for each token analysis
-        dat = t.split(/\t/, 7)
+      # the response is in JSON
+      parsed = JSON.parse(response)
+
+      # we look at every denotation, which contains the tag
+      # CGIAccessor differentiates between :pos and :cat
+      # The difference between them I haven't figured out yet, quite
+      parsed['denotations'].each_with_index do |p , i|
         token = Hash.new
-        token[:idx]  = i - 1   # use 0-oriented index
-        token[:lex]  = dat[1]
-        token[:base] = dat[2]
-        token[:pos]  = dat[3]
-        token[:cat]  = dat[4]
-        token[:type] = dat[5]
-        token[:args] = dat[6].split.collect{|a| type, ref = a.split(':'); [type, ref.to_i - 1]} if dat[6]
-        tokens << token  # '<<' is push operation
+        token[:idx] = i
+        token[:beg] = p['span']['begin']
+        token[:end] = p['span']['end']
+        
+        # as the token appears in the text
+        token[:lex] = sentence[token[:beg]..token[:end]-1]
+        token[:pos] = p['obj'] # or is it token[:cat]?
+        
+        # so this is a big cheat
+        token[:cat] = p['obj'][0..1]
+
+        # update mapping
+        spacy_token_ids[p['id']] = i
+        tokens << token        
       end
+      
+      # just treat every dependency as if it was
+      # an predicate-argument relation
+      parsed['relations'].each do |r|
+        # what is the token in question?
+        i = spacy_token_ids[r['obj']]
+        # i = spacy_token_ids[r['subj']]
+        
+        tokens[i][:args] ||= [] 
+        argument_counter = "ARG" + (tokens[i][:args].size + 1).to_s
+        
+        # if the token is the root, we set ARG1 => -1
+        if r['pred'] == "ROOT"
+          argument_token = -1
+          root = i
+        else
+          argument_token = spacy_token_ids[r['subj']]
+          # argument_token = spacy_token_ids[r['obj']]
 
-      root = tokens.shift[:args][0][1]
+        end   
+        tokens[i][:type] = r['pred']  
 
-      # get span offsets
-      i = 0
-      tokens.each do |t|
-        i += 1 until sentence[i] !~ /[ \t\n]/
-        t[:beg] = i
-        t[:end] = i + t[:lex].length
-        i = t[:end]
+        tokens[i][:args] << [ argument_counter , argument_token ]      
       end
-
+      
+      puts tokens , root
       [tokens, root]
     else
       raise "Enju CGI server dose not respond."
