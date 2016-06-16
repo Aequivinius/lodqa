@@ -36,7 +36,6 @@ class EnjuAccess::CGIAccessor
     focus            = get_focus(tokens, base_noun_chunks)
     relations        = get_relations(tokens, base_noun_chunks)
     
-    puts tokens, root
     puts base_noun_chunks, focus, relations
 
     {

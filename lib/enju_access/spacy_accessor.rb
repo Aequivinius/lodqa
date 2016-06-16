@@ -119,8 +119,6 @@ class EnjuAccess::SpacyAccessor
 
         tokens[i][:args] << [ argument_counter , argument_token ]      
       end
-      
-      puts tokens , root
       [tokens, root]
     else
       raise "Enju CGI server dose not respond."
@@ -131,18 +129,34 @@ class EnjuAccess::SpacyAccessor
   # It finds base noun chunks from the category pattern.
   # It assumes that the last word of a BNC is its head.
   def get_base_noun_chunks (tokens)
+    puts tokens
     base_noun_chunks = []
     beg = -1    ## the index of the begining token of the base noun chunk
+    
+    current_stack = []
     tokens.each do |t|
+      
+      if NC_CAT.include?(t[:cat]):
+        current_stack << t
+        
+        if 
+      
+      
+      
       beg = t[:idx] if beg < 0 && NC_CAT.include?(t[:cat])
       beg = -1 unless NC_CAT.include?(t[:cat])
       if beg >= 0
-        if t[:args] == nil && NC_HEAD_CAT.include?(t[:cat])
+        puts "Found " , t
+        
+        # why would that be. why can't it have args
+        # if t[:args] == nil && NC_HEAD_CAT.include?(t[:cat])
+        if NC_HEAD_CAT.include?(t[:cat])
           base_noun_chunks << {:head => t[:idx], :beg => beg, :end => t[:idx]}
           beg = -1
         end
       end
     end
+    puts base_noun_chunks
     base_noun_chunks
   end
 
