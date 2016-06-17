@@ -35,8 +35,7 @@ class EnjuAccess::CGIAccessor
     base_noun_chunks = get_base_noun_chunks(tokens)
     focus            = get_focus(tokens, base_noun_chunks)
     relations        = get_relations(tokens, base_noun_chunks)
-    
-    puts base_noun_chunks, focus, relations
+  
 
     {
       :tokens => tokens,  # The array of token parses

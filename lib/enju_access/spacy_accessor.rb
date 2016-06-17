@@ -119,6 +119,7 @@ class EnjuAccess::SpacyAccessor
 
         tokens[i][:args] << [ argument_counter , argument_token ]      
       end
+
       [tokens, root]
     else
       raise "Enju CGI server dose not respond."
