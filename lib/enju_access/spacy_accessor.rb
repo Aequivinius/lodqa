@@ -125,9 +125,11 @@ class EnjuAccess::SpacyAccessor
       raise "Enju CGI server dose not respond."
     end
   end
-
+  
+  # assumes last token is head
+  # if it doesn't put a head, it will put a 'stack level too deep' errör
   def get_base_noun_chunks(tokens)
-    # let's try to rewrite this
+    
     base_noun_chunks = []
     
     in_noun_chunk = false
@@ -140,74 +142,18 @@ class EnjuAccess::SpacyAccessor
       
       if ( NC_CAT.include?(t[:cat]) == false ) && ( base_noun_chunks.length > 0 ) && in_noun_chunk
         base_noun_chunks[-1][:end] = t[:idx] - 1
+        base_noun_chunks[-1][:head] = t[:idx] - 1
+        
+        # if NC_HEAD_CAT.include?(t[:cat])
+        #   base_noun_chunks[-1][:head] = t[:idx] - 1
+        # end
+        
         in_noun_chunk = false
       end
     end
     
-    base_noun_chunks.each do |chunk|
-      puts chunk
-      if chunk[:end] - chunk[:beg] < 1 and NC_HEAD_CAT.include?(tokens[chunk[:beg]][:cat])
-        chunk[:head] = chunk[:beg]
-        next
-      end
-      
-      chunk[:head] = chunk[:beg]
-      
-      ## CHANGE THIS TO JUST TAKE THE LAST T AS HEAD!
-      
-      puts chunk 
-      # go through all the tokens between beg and end
-      tokens[chunk[:beg]..chunk[:end]].each do |t|
-        puts t
-        if NC_HEAD_CAT.include?(t[:cat])
-          i=0
-        end
-      end
-    end
-    # find the heads for all the chunks
-    # base_noun_chunks << {:head => t[:idx]}
     return base_noun_chunks
   end
-
-  # # It finds base noun chunks from the category pattern.
-  # # It assumes that the last word of a BNC is its head.
-  # def get_base_noun_chunks (tokens)
-  #   
-  #   
-  #   
-  #   puts tokens
-  #   base_noun_chunks = []
-  #   beg = -1    ## the index of the begining token of the base noun chunk
-  #   
-  #   current_stack = []
-  #   tokens.each do |t|
-  #     
-  #     if NC_CAT.include?(t[:cat])
-  #       current_stack << t
-  #       
-  #     end
-  #     
-  #     
-  #     
-  #     if ( beg < 0 && NC_CAT.include?(t[:cat]) )
-  #       beg = t[:idx] 
-  #     end
-  #     beg = -1 unless NC_CAT.include?(t[:cat])
-  #     if beg >= 0
-  #       puts "Found " , t
-  #       
-  #       # why would that be. why can't it have args
-  #       # if t[:args] == nil && NC_HEAD_CAT.include?(t[:cat])
-  #       if NC_HEAD_CAT.include?(t[:cat])
-  #         base_noun_chunks << {:head => t[:idx], :beg => beg, :end => t[:idx]}
-  #         beg = -1
-  #       end
-  #     end
-  #   end
-  #   puts base_noun_chunks
-  #   base_noun_chunks
-  # end
-
 
   # It finds the shortest path between the head word of any two base noun chunks that are not interfered by other base noun chunks.
   def get_relations (tokens, base_noun_chunks)
