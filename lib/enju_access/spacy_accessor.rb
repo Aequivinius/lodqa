@@ -12,9 +12,15 @@ module EnjuAccess; end unless defined? EnjuAccess
 class EnjuAccess::SpacyAccessor
   attr_reader :enju
 
+  # FIXME: NC_CAT etc are bad names  
   # Noun-chunk elements
   # (Note that PRP is not included. For dialog analysis however PRP (personal pronoun) would need to be included.)
   NC_CAT      = ["NN", "NNP", "CD", "FW", "JJ"]
+  
+  # spaCy and enju mark cases such as 'Alzheimer's disease'
+  # as follows:
+  # Alzheimer/NNP 's/POS disease/NN
+  POSSESIVE_TAGS = ["POS", "PO"]
 
   # Noun-chunk elements that may appear at the head position
   NC_HEAD_CAT = ["NN", "NNP", "CD", "FW"]
@@ -103,6 +109,7 @@ class EnjuAccess::SpacyAccessor
         i = spacy_token_ids[r['obj']]
         # i = spacy_token_ids[r['subj']]
         
+        # change this to show dependency type
         tokens[i][:args] ||= [] 
         argument_counter = "ARG" + (tokens[i][:args].size + 1).to_s
         
@@ -126,30 +133,52 @@ class EnjuAccess::SpacyAccessor
     end
   end
   
-  # assumes last token is head
-  # if it doesn't put a head, it will put a 'stack level too deep' errör
-  def get_base_noun_chunks(tokens)
-    
+  def get_base_noun_chunks(tokens)    
     base_noun_chunks = []
     
-    in_noun_chunk = false
-    tokens.each do |t|
+    within_noun_chunk = false    
+    tokens.each_with_index do |token, i|
+      # the first element in a noun chunk
+      if NC_CAT.include?(token[:cat]) && 
+         !within_noun_chunk
+        
+        within_noun_chunk = true
+        base_noun_chunks << { :beg => i}
       
-      if NC_CAT.include?(t[:cat]) and ( in_noun_chunk == false )
-        base_noun_chunks << {:beg => t[:idx]}
-        in_noun_chunk = true
+      # special case: possesive 's
+      # only accept if the next token is a NN
+      elsif POSSESIVE_TAGS.include?(token[:cat]) &&
+            NC_CAT.include?(tokens[i+1][:cat])
+       
+        next
       end
       
-      if ( NC_CAT.include?(t[:cat]) == false ) && ( base_noun_chunks.length > 0 ) && in_noun_chunk
-        base_noun_chunks[-1][:end] = t[:idx] - 1
-        base_noun_chunks[-1][:head] = t[:idx] - 1
-        
-        # if NC_HEAD_CAT.include?(t[:cat])
-        #   base_noun_chunks[-1][:head] = t[:idx] - 1
-        # end
-        
-        in_noun_chunk = false
+      # element after the last element of noun chunk  
+      if !NC_CAT.include?(token[:cat]) && 
+            within_noun_chunk
+         
+        base_noun_chunks[-1][:end] = i - 1
+        base_noun_chunks[-1][:head] = i - 1
+        within_noun_chunk = false 
       end
+    end
+    
+    # assemble string
+    base_noun_chunks.each do |chunk|
+      chunk_string = ""
+      chunk_tokens = tokens[chunk[:beg]..chunk[:end]]
+      chunk_tokens.each_with_index do |chunk_token, i|
+        puts chunk_token
+        chunk_string += chunk_token[:lex]
+        
+        if i+1 < chunk_tokens.length && 
+           chunk_token[:end] < chunk_tokens[i+1][:beg]
+          
+          chunk_string += " "
+        end 
+        
+      end
+      chunk[:string] = chunk_string
     end
     
     return base_noun_chunks
