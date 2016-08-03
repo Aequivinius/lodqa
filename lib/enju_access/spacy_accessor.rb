@@ -148,6 +148,7 @@ class EnjuAccess::SpacyAccessor
       # special case: possesive 's
       # only accept if the next token is a NN
       elsif POSSESIVE_TAGS.include?(token[:cat]) &&
+            i+1 <= tokens.length &&
             NC_CAT.include?(tokens[i+1][:cat])
        
         next
@@ -155,11 +156,20 @@ class EnjuAccess::SpacyAccessor
       
       # element after the last element of noun chunk  
       if !NC_CAT.include?(token[:cat]) && 
-            within_noun_chunk
+         within_noun_chunk
          
         base_noun_chunks[-1][:end] = i - 1
         base_noun_chunks[-1][:head] = i - 1
-        within_noun_chunk = false 
+        within_noun_chunk = false
+      end
+      
+      # or it's the last element of the query
+      if within_noun_chunk && 
+         i+1 == tokens.length
+        
+        base_noun_chunks[-1][:end] = i 
+        base_noun_chunks[-1][:head] = i
+        within_noun_chunk = false
       end
     end
     
@@ -168,7 +178,6 @@ class EnjuAccess::SpacyAccessor
       chunk_string = ""
       chunk_tokens = tokens[chunk[:beg]..chunk[:end]]
       chunk_tokens.each_with_index do |chunk_token, i|
-        puts chunk_token
         chunk_string += chunk_token[:lex]
         
         if i+1 < chunk_tokens.length && 
@@ -213,6 +222,7 @@ class EnjuAccess::SpacyAccessor
   #
   # ...it will return 1 (devides).
   def get_focus (tokens, base_noun_chunks)
+    puts '==================='
     # find the wh-word
     # assumption: one query has one wh-word
     wh = -1
@@ -222,18 +232,36 @@ class EnjuAccess::SpacyAccessor
         break
       end
     end
+    
+    puts 'wh is: ', wh
 
+    # focus = if wh > -1
+    #           if tokens[wh][:args]
+    #             tokens[wh][:args][0][1]
+    #           else
+    #             wh
+    #           end
+    #         elsif base_noun_chunks.nil? || base_noun_chunks.empty?
+    #           nil
+    #         else
+    #           base_noun_chunks[0][:head]
+    #         end
+    # !focus && focus = -1
+    puts 'base noun chunks: ', base_noun_chunks
     focus = if wh > -1
               if tokens[wh][:args]
                 tokens[wh][:args][0][1]
               else
                 wh
               end
-            elsif base_noun_chunks.nil? || base_noun_chunks.empty?
-              nil
-            else
+            elsif base_noun_chunks.any?
+              puts 'im here'
               base_noun_chunks[0][:head]
-            end
+            else
+              -1
+            end    
+    puts 'focus is: ', focus
+    focus
   end
 
 end
