@@ -1,135 +1,121 @@
 #!/usr/bin/env ruby
-#
-# It takes a plain-English sentence as input and returns parsing results by accessing an Enju cgi server.
-#
+
 require 'rest-client'
 require 'json'
-require 'enju_access/graph'
+
+# Using require_relative for standalone use
+# of this file
+require_relative '../enju_access/graph'
 
 module EnjuAccess; end unless defined? EnjuAccess
 
-# An instance of this class connects to an Enju CGI server to parse a sentence.
+# An instance of this class connects to an spaCy server to parse a sentence.
 class EnjuAccess::SpacyAccessor
   attr_reader :enju
 
-  # FIXME: NC_CAT etc are bad names  
-  # Noun-chunk elements
-  # (Note that PRP is not included. For dialog analysis however PRP (personal pronoun) would need to be included.)
-  NC_CAT      = ["NN", "NNP", "CD", "FW", "JJ"]
-  
+  NOUN_CHUNK_TAGS = ["NN", "NNP", "CD", "FW", "JJ"]
+  WH_WORD_TAGS      = ["WP", "WDT"] # wh-pronoun and wh-determiner 
   # spaCy and enju mark cases such as 'Alzheimer's disease'
   # as follows:
   # Alzheimer/NNP 's/POS disease/NN
-  POSSESIVE_TAGS = ["POS", "PO"]
+  # this is what we need this category for
+  POSSESSIVE_TAGS = ["POS", "PO"]
 
-  # Noun-chunk elements that may appear at the head position
-  NC_HEAD_CAT = ["NN", "NNP", "CD", "FW"]
-
-  # wh-pronoun and wh-determiner
-  WH_CAT      = ["WP", "WDT"]
-
-  # It initializes an instance of RestClient::Resource to connect to an Enju cgi server
-  def initialize (enju_url)
-    @enju = RestClient::Resource.new 'http://spacy.dbcls.jp/spacy_rest'
-    raise "An instance of RestClient::Resource has to be passed as the first argument." unless @enju.instance_of? RestClient::Resource
+  # It initializes an instance of RestClient::Resource
+  # to connect to a spaCy server
+  def initialize(spacy_url='http://spacy.dbcls.jp/spacy_rest')
+    # FIXME: initialize is called with enju url
+    # @spacy = RestClient::Resource.new('http://spacy.dbcls.jp/spacy_rest')
+    @spacy = RestClient::Resource.new('http://spacy.dbcls.jp/spacy_rest')
+    
+    if !@spacy.instance_of? RestClient::Resource
+      raise "Error creating resource, make sure you pass URL"
+    end
   end
 
-  # It takes a plain-English sentence as input, and
-  # returns a hash that represent various aspects
-  # of the PAS and syntactic structure of the sentence.
-  def parse (sentence)
+  # Takes sentence, returns hash with tokens, focus etc.
+  def parse(sentence)
     tokens, root     = get_parse(sentence)
     base_noun_chunks = get_base_noun_chunks(tokens)
     focus            = get_focus(tokens, base_noun_chunks)
     relations        = get_relations(tokens, base_noun_chunks)
-    puts base_noun_chunks, focus, relations
 
-
-    {
-      :tokens => tokens,  # The array of token parses
+    { :tokens => tokens,  # The array of token parses
       :root   => root,    # The index of the root word
-      :focus  => focus,   # The index of the focus word, i.e., the one modified by a _wh_-modifier
+      # The index of the focus word, 
+      # i.e., the one modified by a _wh_-modifier
+      :focus  => focus,         
       :base_noun_chunks => base_noun_chunks, # the array of base noun chunks
       :relations => relations   # Shortest paths between two heads
-    }
-    
+    }  
   end
 
   private
 
-  # It populates the instance variables, tokens and root
-  def get_parse (sentence)
+  # returns tokens and sentence root index
+  def get_parse(sentence)
     return [[], nil] if sentence.nil? || sentence.strip.empty?
     sentence = sentence.strip
     
     # send the sentence to the server
-    # the @enju really should be renamed
-    # but like this it easier to compare to CGIAccessor
-    response = @enju.post :text => sentence
+    response = @spacy.post(:text => sentence)
     
     case response.code
-    when 200             # 200 means success
-      raise "Empty input." if response =~/^Empty line/
+    when 200 # 200 means success
+      if response =~/^Empty line/
+        raise "Empty response."
+      end
 
       tokens = []
       root = nil
-      # This one will map spaCy produced indexes (with prefixes)
-      # to plain ints
-      # this makes finding relations easier
+      # maps spaCy token ids to plain integers
       spacy_token_ids = Hash.new
 
-      # the response is in JSON
       parsed = JSON.parse(response)
-
-      # we look at every denotation, which contains the tag
-      # CGIAccessor differentiates between :pos and :cat
-      # The difference between them I haven't figured out yet, quite
-      parsed['denotations'].each_with_index do |p , i|
-        token = Hash.new
-        token[:idx] = i
-        token[:beg] = p['span']['begin']
-        token[:end] = p['span']['end']
+      
+      # TODO: what's the difference between :pos and :cat?
+      parsed['denotations'].each_with_index do |denotation , i|
+        spacy_token_ids[denotation['id']] = i
         
-        # as the token appears in the text
-        token[:lex] = sentence[token[:beg]..token[:end]-1]
-        token[:pos] = p['obj'] # or is it token[:cat]?
+        beginning = denotation['span']['begin']
+        ending = denotation['span']['end'] 
         
-        # so this is a big cheat
-        token[:cat] = p['obj'][0..1]
-
-        # update mapping
-        spacy_token_ids[p['id']] = i
-        tokens << token        
+        tokens << { 
+          :idx => i, 
+          :beg => beginning, 
+          :end => ending, 
+          # as the token appears in the text
+          :lex => sentence[beginning...ending],
+          :pos => denotation['obj'], # or is it token[:cat]?
+          :cat => denotation['obj'][0..1] # FIXME: Not clean
+        }
       end
       
-      # just treat every dependency as if it was
-      # an predicate-argument relation
-      parsed['relations'].each do |r|
-        # what is the token in question?
-        i = spacy_token_ids[r['obj']]
-        # i = spacy_token_ids[r['subj']]
+      # treat every dependency as if it was
+      # a predicate-argument relation
+      parsed['relations'].each do |relation|
+        # token in question
+        i = spacy_token_ids[relation['obj']]
         
-        # change this to show dependency type
+        # TODO: change this to show dependency type
         tokens[i][:args] ||= [] 
         argument_counter = "ARG" + (tokens[i][:args].size + 1).to_s
         
         # if the token is the root, we set ARG1 => -1
-        if r['pred'] == "ROOT"
+        if relation['pred'] == "ROOT"
           argument_token = -1
           root = i
         else
-          argument_token = spacy_token_ids[r['subj']]
-          # argument_token = spacy_token_ids[r['obj']]
-
+          argument_token = spacy_token_ids[relation['subj']]
         end   
-        tokens[i][:type] = r['pred']  
-
+        
+        tokens[i][:type] = relation['pred']  
         tokens[i][:args] << [ argument_counter , argument_token ]      
       end
 
-      [tokens, root]
+      return [tokens, root]
     else
-      raise "Enju CGI server dose not respond."
+      raise "No response from server."
     end
   end
   
@@ -139,7 +125,7 @@ class EnjuAccess::SpacyAccessor
     within_noun_chunk = false    
     tokens.each_with_index do |token, i|
       # the first element in a noun chunk
-      if NC_CAT.include?(token[:cat]) && 
+      if NOUN_CHUNK_TAGS.include?(token[:cat]) && 
          !within_noun_chunk
         
         within_noun_chunk = true
@@ -147,15 +133,15 @@ class EnjuAccess::SpacyAccessor
       
       # special case: possesive 's
       # only accept if the next token is a NN
-      elsif POSSESIVE_TAGS.include?(token[:cat]) &&
+      elsif POSSESSIVE_TAGS.include?(token[:cat]) &&
             i+1 <= tokens.length &&
-            NC_CAT.include?(tokens[i+1][:cat])
-       
+            NOUN_CHUNK_TAGS.include?(tokens[i+1][:cat])
+      
         next
       end
       
       # element after the last element of noun chunk  
-      if !NC_CAT.include?(token[:cat]) && 
+      if !NOUN_CHUNK_TAGS.include?(token[:cat]) && 
          within_noun_chunk
          
         base_noun_chunks[-1][:end] = i - 1
@@ -193,8 +179,9 @@ class EnjuAccess::SpacyAccessor
     return base_noun_chunks
   end
 
-  # It finds the shortest path between the head word of any two base noun chunks that are not interfered by other base noun chunks.
-  def get_relations (tokens, base_noun_chunks)
+  # shortest path between the head word of any two base noun chunks 
+  # that are not separated by other base noun chunks.
+  def get_relations(tokens, base_noun_chunks)
     graph = Graph.new
     tokens.each do |t|
       if t[:args]
@@ -212,42 +199,24 @@ class EnjuAccess::SpacyAccessor
       o = path.pop
       rels << [s, path, o] if (path & heads).empty?
     end
-    rels
+    return rels
   end
 
 
-  # It returns the index of the "focus word."  For example, for the input
-  # 
-  # What devices are used to treat heart failure?
-  #
-  # ...it will return 1 (devides).
-  def get_focus (tokens, base_noun_chunks)
-    puts '==================='
+  # It returns the index of the focus word. For example:
+  # "What devices are used to treat heart failure?"
+  # will return "1" (devices).
+  def get_focus(tokens, base_noun_chunks)
     # find the wh-word
     # assumption: one query has one wh-word
     wh = -1
     tokens.each do |t|
-      if WH_CAT.include?(t[:cat])
+      if WH_WORD_TAGS.include?(t[:cat])
         wh = t[:idx]
         break
       end
     end
-    
-    puts 'wh is: ', wh
 
-    # focus = if wh > -1
-    #           if tokens[wh][:args]
-    #             tokens[wh][:args][0][1]
-    #           else
-    #             wh
-    #           end
-    #         elsif base_noun_chunks.nil? || base_noun_chunks.empty?
-    #           nil
-    #         else
-    #           base_noun_chunks[0][:head]
-    #         end
-    # !focus && focus = -1
-    puts 'base noun chunks: ', base_noun_chunks
     focus = if wh > -1
               if tokens[wh][:args]
                 tokens[wh][:args][0][1]
@@ -255,29 +224,16 @@ class EnjuAccess::SpacyAccessor
                 wh
               end
             elsif base_noun_chunks.any?
-              puts 'im here'
               base_noun_chunks[0][:head]
             else
               -1
-            end    
-    puts 'focus is: ', focus
-    focus
+            end
   end
-
 end
 
-# From the Ruby documentation:
-# __FILE__ is the magic variable that contains the name of the current file. 
-# $0 is the name of the file used to start the program. This check says “If 
-# this is the main file being used…” This allows a file to be used as a 
-# library, and not to execute code in that context, but if the file is 
-# being used as an executable, then execute that code.
-
 if __FILE__ == $0
-  parser = EnjuAccess::CGIAccessor.new("http://bionlp.dbcls.jp/enju")
-  parse  = parser.parse("what genes are related to alzheimer?")
-  # p parse
-  # exit
+  parser = EnjuAccess::SpacyAccessor.new("http://spacy.dbcls.jp/spacy_rest")
+  parse = parser.parse("What genes are related to Alzheimer's disease?")
   parse[:tokens].each do |t|
     p t
   end
