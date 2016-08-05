@@ -1,53 +1,14 @@
 #!/usr/bin/env ruby
 
-require 'rest-client'
 require 'json'
+require_relative '../accessors/accessor'
 
-# Using require_relative for standalone use
-# of this file
-require_relative '../enju_access/graph'
-
-module EnjuAccess; end unless defined? EnjuAccess
-
-# An instance of this class connects to an spaCy server to parse a sentence.
-class EnjuAccess::SpacyAccessor
-  attr_reader :enju
-
-  NOUN_CHUNK_TAGS = ["NN", "NNP", "CD", "FW", "JJ"]
-  WH_WORD_TAGS      = ["WP", "WDT"] # wh-pronoun and wh-determiner 
-  # spaCy and enju mark cases such as 'Alzheimer's disease'
-  # as follows:
-  # Alzheimer/NNP 's/POS disease/NN
-  # this is what we need this category for
-  POSSESSIVE_TAGS = ["POS", "PO"]
-
-  # It initializes an instance of RestClient::Resource
-  # to connect to a spaCy server
-  def initialize(spacy_url='http://spacy.dbcls.jp/spacy_rest')
-    # FIXME: initialize is called with enju url
-    # @spacy = RestClient::Resource.new('http://spacy.dbcls.jp/spacy_rest')
-    @spacy = RestClient::Resource.new('http://spacy.dbcls.jp/spacy_rest')
-    
-    if !@spacy.instance_of? RestClient::Resource
-      raise "Error creating resource, make sure you pass URL"
-    end
-  end
-
-  # Takes sentence, returns hash with tokens, focus etc.
-  def parse(sentence)
-    tokens, root     = get_parse(sentence)
-    base_noun_chunks = get_base_noun_chunks(tokens)
-    focus            = get_focus(tokens, base_noun_chunks)
-    relations        = get_relations(tokens, base_noun_chunks)
-
-    { :tokens => tokens,  # The array of token parses
-      :root   => root,    # The index of the root word
-      # The index of the focus word, 
-      # i.e., the one modified by a _wh_-modifier
-      :focus  => focus,         
-      :base_noun_chunks => base_noun_chunks, # the array of base noun chunks
-      :relations => relations   # Shortest paths between two heads
-    }  
+class Accessor::SpacyAccessor < Accessor
+  attr_reader :spacy
+  
+  def initialize(parser_url)
+    # FIXME: is called with enju url in graphicator
+    super('http://spacy.dbcls.jp/spacy_rest')
   end
 
   private
@@ -58,7 +19,7 @@ class EnjuAccess::SpacyAccessor
     sentence = sentence.strip
     
     # send the sentence to the server
-    response = @spacy.post(:text => sentence)
+    response = @server.post(:text => sentence)
     
     case response.code
     when 200 # 200 means success
@@ -179,60 +140,11 @@ class EnjuAccess::SpacyAccessor
     return base_noun_chunks
   end
 
-  # shortest path between the head word of any two base noun chunks 
-  # that are not separated by other base noun chunks.
-  def get_relations(tokens, base_noun_chunks)
-    graph = Graph.new
-    tokens.each do |t|
-      if t[:args]
-        t[:args].each do |type, arg|
-          graph.add_edge(t[:idx], arg, 1) if arg >= 0
-        end
-      end
-    end
 
-    rels = []
-    heads = base_noun_chunks.collect{|c| c[:head]}
-    base_noun_chunks.combination(2) do |c|
-      path = graph.shortest_path(c[0][:head], c[1][:head])
-      s = path.shift
-      o = path.pop
-      rels << [s, path, o] if (path & heads).empty?
-    end
-    return rels
-  end
-
-
-  # It returns the index of the focus word. For example:
-  # "What devices are used to treat heart failure?"
-  # will return "1" (devices).
-  def get_focus(tokens, base_noun_chunks)
-    # find the wh-word
-    # assumption: one query has one wh-word
-    wh = -1
-    tokens.each do |t|
-      if WH_WORD_TAGS.include?(t[:cat])
-        wh = t[:idx]
-        break
-      end
-    end
-
-    focus = if wh > -1
-              if tokens[wh][:args]
-                tokens[wh][:args][0][1]
-              else
-                wh
-              end
-            elsif base_noun_chunks.any?
-              base_noun_chunks[0][:head]
-            else
-              -1
-            end
-  end
 end
 
 if __FILE__ == $0
-  parser = EnjuAccess::SpacyAccessor.new("http://spacy.dbcls.jp/spacy_rest")
+  parser = Accessor::SpacyAccessor.new("http://spacy.dbcls.jp/spacy_rest")
   parse = parser.parse("What genes are related to Alzheimer's disease?")
   parse[:tokens].each do |t|
     p t

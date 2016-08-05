@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+
 require 'sinatra/base'
 require 'rest_client'
 require 'sinatra-websocket'
@@ -51,21 +52,11 @@ class LodqaWS < Sinatra::Base
 		@parser = params['parser'] unless params['parser'].nil?
 		
 		if @query
-			parser_url = @config["parser_url"]
-			g = Lodqa::Graphicator.new(parser_url)
+			parser_url = @config["parser_url"] unless @config["parser_url"].nil?
+			g = Lodqa::Graphicator.new(@parser, parser_url)
 			g.parse(@query)
 			@parse_rendering = g.get_rendering
 			@pgp = g.get_pgp
-			
-			# Like this you could select the parser using the 'parser' argument in your query
-			# if not defined? @parser or @parser.downcase == "default" or @parser.downcase =="Graphicator"
-			# 	g = Lodqa::Graphicator.new(parser_url)
-			# 	g.parse(@query)
-			# 	@parse_rendering = g.get_rendering
-			# 	@pgp = g.get_pgp
-			# else 
-			# 	g = Lodqa::GraphicatorSpacy.new(parser_url)
-			# end
 		end
 
 		erb :index

@@ -1,8 +1,5 @@
 #!/usr/bin/env ruby
-#
-# It parses a query and produces its parse rendering and PGP.
-#
-require 'enju_access/enju_access'
+# Parses a query and produces its parse rendering and PGP.
 require 'net/http'
 
 module Lodqa; end unless defined? Lodqa
@@ -10,11 +7,20 @@ module Lodqa; end unless defined? Lodqa
 # An instance of this class is initialized with a dictionary.
 class Lodqa::Graphicator
   attr_reader :parser
+  
+  # TODO: Document this
+  PARSERS = {
+    :default => { :name => 'EnjuAccessor' , :file => 'enju_accessor' } ,
+    :spacy => { :name => 'SpacyAccessor', :file => 'spacy_accessor' } ,
+    :enju => { :name => 'EnjuAccessor' , :file => 'enju_accessor' }
+  }
 
-  def initialize (parser_url)
-    raise ArgumentError, "parser_url should be given." if parser_url.nil? || parser_url.empty?
-    @parser = EnjuAccess::SpacyAccessor.new(parser_url)
-    # @parser = EnjuAccess::CGIAccessor.new(parser_url)
+  def initialize(parser=nil, parser_url=nil)
+    if !parser.nil? && parser_names = PARSERS[parser.downcase.to_sym]
+    else parser_names = PARSERS[:default]
+    end
+    require 'accessors/' + parser_names[:file]
+    @parser = eval("Accessor::" + parser_names[:name]).new(parser_url)
   end
 
   def parse(query)
@@ -22,7 +28,7 @@ class Lodqa::Graphicator
   end
 
   def get_rendering
-    EnjuAccess::get_graph_rendering(@parse)
+    @parser.get_graph_rendering(@parse)
   end
 
   def get_pgp

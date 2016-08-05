@@ -2,7 +2,7 @@
 require 'net/http'
 require 'sparql/client'
 require 'json'
-require 'enju_access/enju_access'
+require 'accessors/accessor'
 require 'lodqa/graph_finder'
 require 'lodqa/termfinder'
 
