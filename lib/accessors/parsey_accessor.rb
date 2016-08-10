@@ -3,11 +3,12 @@
 require 'json'
 require_relative '../accessors/accessor'
 
-class Accessor::SpacyAccessor < Accessor
-  attr_reader :spacy
+class Accessor::ParseyAccessor < Accessor
+  attr_reader :parsey
   
   def initialize(parser_url)
-    super('http://spacy.dbcls.jp/spacy_rest')
+    # local adress for development
+    super('http://127.0.0.1:5000/')
   end
 
   private
@@ -29,13 +30,13 @@ class Accessor::SpacyAccessor < Accessor
       tokens = []
       root = nil
       # maps spaCy token ids to plain integers
-      spacy_token_ids = Hash.new
+      parsey_token_ids = Hash.new
 
       parsed = JSON.parse(response)
-      
+            
       # TODO: what's the difference between :pos and :cat?
       parsed['denotations'].each_with_index do |denotation , i|
-        spacy_token_ids[denotation['id']] = i
+        parsey_token_ids[denotation['id']] = i
         
         beginning = denotation['span']['begin']
         ending = denotation['span']['end'] 
@@ -54,11 +55,12 @@ class Accessor::SpacyAccessor < Accessor
       # treat every dependency as if it was
       # a predicate-argument relation
       parsed['relations'].each do |relation|
+        puts relation
         # token in question
-        i = spacy_token_ids[relation['obj']]
+        i = parsey_token_ids[relation['subj']]
         
         # TODO: change this to show dependency type
-        tokens[i][:args] ||= [] 
+        tokens[i][:args] ||= []
         argument_counter = "ARG" + (tokens[i][:args].size + 1).to_s
         
         # if the token is the root, we set ARG1 => -1
@@ -66,13 +68,14 @@ class Accessor::SpacyAccessor < Accessor
           argument_token = -1
           root = i
         else
-          argument_token = spacy_token_ids[relation['subj']]
+          argument_token = parsey_token_ids[relation['obj']]
         end   
         
         tokens[i][:type] = relation['pred']  
         tokens[i][:args] << [ argument_counter , argument_token ]      
       end
-
+      
+      puts tokens, root
       return [tokens, root]
     else
       raise "No response from server."

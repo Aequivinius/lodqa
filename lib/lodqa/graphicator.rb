@@ -8,11 +8,11 @@ module Lodqa; end unless defined? Lodqa
 class Lodqa::Graphicator
   attr_reader :parser
   
-  # TODO: Document this
   PARSERS = {
     :default => { :name => 'EnjuAccessor' , :file => 'enju_accessor' } ,
     :spacy => { :name => 'SpacyAccessor', :file => 'spacy_accessor' } ,
-    :enju => { :name => 'EnjuAccessor' , :file => 'enju_accessor' }
+    :enju => { :name => 'EnjuAccessor' , :file => 'enju_accessor' } ,
+    :parsey => { :name=> 'ParseyAccessor' , :file => 'parsey_accessor' }
   }
 
   def initialize(parser=nil, parser_url=nil)
