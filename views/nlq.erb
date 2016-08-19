@@ -1,21 +1,40 @@
 <h1>Natural Language Query
 <i title="Begin with a natural language query, then graphicate it!" class="help-icon fa fa-info-circle"></i>
 </h1>
+
 <form	id="nlqform"
 		action="/graphicator"
      	method="get"
      	entype="multipart/form-data">
 
-<input	name="query" id="query" type="text"
-		required="required"
-		<% if @query %>
-		value="<%= @query %>"
-		<% end %>
-		placeholder="Enter a natural language query." />
+	<input	name="query" id="query" type="text"
+			required="required"
+			<% if @query %>
+			value="<%= @query %>"
+			<% end %>
+			placeholder="Enter a natural language query." />
 
-<input	name = "target"
-		hidden = "hidden" />
+	<div class="float-bar">
+		
+		<label	class="float-left;" for="parser">Select a parser:</label>
+		
+		<select class="float-left;" 
+				label="Parser:" 
+				name="parser" 
+				id="parser" />
+				
+			<% Lodqa::Graphicator.get_parser_names().each do |key, parser| %>
+			<option value="<%= key %>" <%= 'selected' if @parser.eql?(key.to_s) %>><%= parser %></option>
+			<% end %>
 
-<input id="graphicateButton" type="submit"
-	   value="Graphicate!" />
+		</select> 
+		
+		<input	name = "target"
+				hidden = "hidden" />
+		
+		<input  style="float: right;" 
+				id="graphicateButton" 
+				type="submit"
+				value="Graphicate!" />
+	</div>
 </form>

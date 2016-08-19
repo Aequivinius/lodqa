@@ -82,7 +82,8 @@ class Accessor::ParseyAccessor < Accessor
     end
   end
   
-  def get_base_noun_chunks(tokens)    
+  def get_base_noun_chunks(tokens) 
+    # so this who fuck is just copied
     base_noun_chunks = []
     
     within_noun_chunk = false    
@@ -146,7 +147,7 @@ class Accessor::ParseyAccessor < Accessor
 end
 
 if __FILE__ == $0
-  parser = Accessor::SpacyAccessor.new("http://spacy.dbcls.jp/spacy_rest")
+  parser = Accessor::ParseyAccessor.new("http://spacy.dbcls.jp/spacy_rest")
   parse = parser.parse("What genes are related to Alzheimer's disease?")
   parse[:tokens].each do |t|
     p t

@@ -9,15 +9,17 @@ class Lodqa::Graphicator
   attr_reader :parser
   
   PARSERS = {
-    :default => { :name => 'EnjuAccessor' , :file => 'enju_accessor' } ,
-    :spacy => { :name => 'SpacyAccessor', :file => 'spacy_accessor' } ,
-    :enju => { :name => 'EnjuAccessor' , :file => 'enju_accessor' } ,
-    :parsey => { :name=> 'ParseyAccessor' , :file => 'parsey_accessor' }
+    :spacy => { :name => 'SpacyAccessor', :file => 'spacy_accessor' , :human => 'spaCy' } ,
+    :enju => { :name => 'EnjuAccessor' , :file => 'enju_accessor' , :human => 'enju' } ,
+    :parsey => { :name=> 'ParseyAccessor' , :file => 'parsey_accessor' , :human => 'Parsey McParseface' } ,
+    :parsley => { :name=> 'ParseyAccessor' , :file => 'parsey_accessor' , :human => 'Parsey McParseface' }
   }
+  
+  DEFAULT_PARSER = 'enju'.to_sym
 
   def initialize(parser=nil, parser_url=nil)
     if !parser.nil? && parser_names = PARSERS[parser.downcase.to_sym]
-    else parser_names = PARSERS[:default]
+    else parser_names = PARSERS[DEFAULT_PARSER]
     end
     require 'accessors/' + parser_names[:file]
     @parser = eval("Accessor::" + parser_names[:name]).new(parser_url)
@@ -76,5 +78,14 @@ class Lodqa::Graphicator
       }
     end
   end
-
+  
+  def self.get_parser_names()
+    r = {}
+    PARSERS.each do |key, parser|
+      r[key] = parser[:human] unless r.has_value?(parser[:human])
+    end
+    
+    r
+  end
+  
 end

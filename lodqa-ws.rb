@@ -18,7 +18,7 @@ class LodqaWS < Sinatra::Base
     enable :logging
     file = File.new("#{settings.root}/log/#{settings.environment}.log", 'a+')
     file.sync = true
-    use Rack::CommonLogger, file
+    use Rack::CommonLogger, file  
 	end
 
 	before do
@@ -57,6 +57,7 @@ class LodqaWS < Sinatra::Base
 			g.parse(@query)
 			@parse_rendering = g.get_rendering
 			@pgp = g.get_pgp
+			
 		end
 
 		erb :index
